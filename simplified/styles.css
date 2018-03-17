@@ -1,0 +1,20 @@
+.enter
+{
+	font-size: 32px;
+	font-family: "Courier New", Courier, monospace;
+}
+
+#projector
+{
+	font-family: "Courier New", Courier, monospace;
+}
+
+#container
+{
+	width: 800px;
+}
+
+#stage2
+{
+	display: none;
+}

@@ -1,0 +1,99 @@
+...SECTION TO-CALCULATIONS:
+const float PI = 3.141592653589793238462643383279502884197169399;
+
+float newX = coords.x;
+float newY = coords.y;
+
+newY = sqrt((coords.x - 0.5)*(coords.x - 0.5) + (coords.y - 0.5)*(coords.y - 0.5))*2.0;
+if (newY > 1.0)
+	return vec2(-1.0, -1.0); // this point will be blank
+	
+// depends on the quarter of the coordinates system
+if (coords.x > 0.5)
+{
+	if (coords.y > 0.5)
+		newX = atan(abs((coords.x - 0.5)/(coords.y - 0.5)))/(2.0*PI);
+	else
+		newX = 0.5 - atan(abs((coords.x - 0.5)/(coords.y - 0.5)))/(2.0*PI);
+}
+else
+{
+	if (coords.y < 0.5)
+		newX = 0.5 + atan(abs((coords.x - 0.5)/(coords.y - 0.5)))/(2.0*PI);
+	else
+		newX = 1.0 - atan(abs((coords.x - 0.5)/(coords.y - 0.5)))/(2.0*PI);
+}
+
+// apply new central merdian
+newX = newX + meridian / 360.0;
+if (newX < 0.0)
+{
+	newX = 1.0 + newX;
+}
+else if (newX > 1.0)
+{
+	newX = newX - 1.0;
+}
+
+// if south pole is center, everything is reverse
+if (centerOn == 1)
+{
+	newX = 1.0 - newX;
+	newY = 1.0 - newY;
+}
+return vec2(newX, newY);
+
+...SECTION FROM-CALCULATIONS:
+const float PI = 3.141592653589793238462643383279502884197169399;
+
+// our calculations will require that we push to this meridian
+coords.x += 0.5;
+if (coords.x < 0.0)
+{
+	coords.x = 1.0 + coords.x;
+}
+else if (coords.x > 1.0)
+{
+	coords.x = coords.x - 1.0;
+}
+
+// if south pole is center, everything is reverse
+if (centerOn == 1)
+{
+	coords.x = 1.0 - coords.x;
+	coords.y = 1.0 - coords.y;
+}
+
+// apply new central merdian
+coords.x = coords.x - meridian / 360.0;
+if (coords.x < 0.0)
+{
+	coords.x = 1.0 + coords.x;
+}
+else if (coords.x > 1.0)
+{
+	coords.x = coords.x - 1.0;
+}
+
+float newX = coords.x;
+float newY = coords.y;
+
+float cosx = cos((coords.x - 0.5)*2.0*PI);
+float sinx = sin((coords.x - 0.5)*2.0*PI);
+newX = 0.5 + (sinx * (coords.y*0.5));
+newY = 0.5 + (cosx * (coords.y*0.5));
+
+return vec2(newX, newY);
+
+...SECTION TO-FORM:
+Pick central meridian (from -180 to 180): <input name="meridian" type="number" min="-180" max="180"><br>
+Center on: <select name="centerOn"><option>North Pole</option><option>South Pole</option></select>
+...SECTION FROM-FORM:
+Pick central meridian (from -180 to 180): <input name="meridian" type="number" min="-180" max="180"><br>
+Center on: <select name="centerOn"><option>North Pole</option><option>South Pole</option></select>
+...SECTION OUTPUT-WIDTH-CALCULATIONS:
+return meridian*2;
+...SECTION OUTPUT-HEIGHT-CALCULATIONS:
+return meridian*2;
+...SECTION MERIDIAN-LENGTH-CALCULATIONS:
+return width/2;

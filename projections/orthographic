@@ -1,0 +1,68 @@
+...SECTION TO-CALCULATIONS:
+const float PI = 3.141592653589793238462643383279502884197169399;
+
+// left circle will be projected to left side (-180, 0)
+// right circle to the right side (0, 180)
+
+float newX = coords.x;
+float newY = coords.y;
+
+newY = asin((newY-0.5)/0.5)/PI + 0.5;
+
+// let's stretch our side to entire surface, notice how the central meridian
+// shifts to -90 or 90 - this is exactly what we want.
+newX *= 2.0;
+if (newX > 1.0)
+	newX -= 1.0;
+
+// newX is more tricky, we need to first find the radius of the line of latitude it is on
+float lineOfLatRadius = cos((newY-0.5)*PI)*0.5;
+
+// now we can calculate newX
+newX = asin((newX-0.5)/lineOfLatRadius)/PI + 0.5;
+
+// shrink back to original size
+newX *= 0.5;
+if (coords.x > 0.5)
+	newX += 0.5;
+
+return vec2(newX, newY);
+...SECTION FROM-CALCULATIONS:
+const float PI = 3.141592653589793238462643383279502884197169399;
+
+// left side (-180, 0) will be projected to left circle
+// right side (0, 180) to the right circle
+
+float newX = coords.x;
+float newY = coords.y;
+
+newY = (sin((coords.y-0.5)*PI)*0.5) + 0.5;
+
+// let's stretch our side to entire surface, notice how the central meridian
+// shifts to -90 or 90 - this is exactly what we want.
+newX *= 2.0;
+if (newX > 1.0)
+	newX -= 1.0;
+
+// newX is more tricky, we need to first find the radius of the line of latitude it is on
+float lineOfLatRadius = cos((coords.y-0.5)*PI)*0.5;
+
+// now we can calculate newX
+newX = lineOfLatRadius * sin((newX-0.5)*PI) + 0.5;
+
+// shrink back to original size
+newX *= 0.5;
+if (coords.x > 0.5)
+	newX += 0.5;
+
+return vec2(newX, newY);
+...SECTION TO-FORM:
+No additional data necessary
+...SECTION FROM-FORM:
+No additional data necessary
+...SECTION OUTPUT-WIDTH-CALCULATIONS:
+return meridian*2;
+...SECTION OUTPUT-HEIGHT-CALCULATIONS:
+return meridian;
+...SECTION MERIDIAN-LENGTH-CALCULATIONS:
+return width/2;

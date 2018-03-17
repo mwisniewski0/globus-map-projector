@@ -1,0 +1,64 @@
+http://mathworld.wolfram.com/LambertAzimuthalEqual-AreaProjection.html
+
+...SECTION TO-CALCULATIONS:
+const float PI = 3.14159265359;
+
+float newX = coords.x;
+float newY = coords.y;
+
+newX -= 0.5;
+newY -= 0.5;
+newX *= 4.0;
+newY *= 4.0;
+
+float distanceFromCenterSquared = newX*newX + newY*newY;
+if (distanceFromCenterSquared > 4.0)
+	return vec2(-1.0, -1.0);
+
+float cosPhi = 1.0 - distanceFromCenterSquared/2.0;
+float lambda = atan(abs(newX/newY));
+
+if (newX > 0.0 && newY < 0.0)
+	newX = PI - lambda;
+else if (newX > 0.0 && newY > 0.0)
+	newX = lambda;
+else if (newX < 0.0 && newY > 0.0)
+	newX = 2.0 * PI - lambda;
+else if (newX < 0.0 && newY < 0.0)
+	newX = PI + lambda;
+
+newY = acos(cosPhi);
+newY /= PI;
+newX /= 2.0*PI;
+
+// apply new central meridian
+newX = newX + meridian / 360.0;
+if (newX < 0.0)
+{
+	newX = 1.0 + newX;
+}
+else if (newX > 1.0)
+{
+	newX = newX - 1.0;
+}
+
+if (centerOn == 0)
+	return vec2(newX, newY);
+else
+	return vec2(1.0 - newX, 1.0-newY);
+
+...SECTION FROM-CALCULATIONS:
+
+...SECTION TO-FORM:
+Pick central meridian (from -180 to 180): <input name="meridian" type="number" min="-180" max="180"><br>
+Center on: <select name="centerOn"><option>North Pole</option><option>South Pole</option></select>
+
+...SECTION FROM-FORM:
+Pick central meridian (from -180 to 180): <input name="meridian" type="number" min="-180" max="180">
+
+...SECTION OUTPUT-WIDTH-CALCULATIONS:
+return meridian*2;
+...SECTION OUTPUT-HEIGHT-CALCULATIONS:
+return meridian*2;
+...SECTION MERIDIAN-LENGTH-CALCULATIONS:
+return width/2;

@@ -1,0 +1,183 @@
+...SECTION TO-CALCULATIONS:
+const float PI = 3.14159265359;
+float newX = coords.x;
+float newY = coords.y;
+float goreWidth = 1.0/goresNumber;
+
+// we will check to which gore this point belongs
+int currentGore = 0;
+
+// First we'll project the point to a single gore of height 1.0
+
+// for concentric gores
+if (interceptionType == 1)
+{
+	bool goreFound = false;
+
+	float angleBetweenGores = 2.0*PI/float(goresNumber);
+	for (int i = 0; i < int(goresNumber); ++i)
+	{
+		// rotation around center
+		float angle = angleBetweenGores * float(i);
+		// rotate clockwise
+		newX = 0.5 + (coords.x-0.5)*cos(angle) + (coords.y-0.5)*sin(angle);
+		newY = 0.5 - (coords.x-0.5)*sin(angle) + (coords.y-0.5)*cos(angle);
+		
+		// stretch the gore to the height of entire texture
+		newY = newY * 2.0;
+		
+		// check if this point is in the gore
+		// project from gore to equirectangular
+		float xInEquirect = (newX-0.5)/cos((newY-0.5)*PI)+goreWidth/2.0;
+	    if (xInEquirect >= 0.0 && xInEquirect <= goreWidth && newY >= 0.0 && newY <= 1.0)
+		{
+			goreFound = true; // that's the right gore
+			currentGore = i;
+			break;
+		}
+	}
+	
+	if (!goreFound)
+	{
+		// this point should be blank
+		return vec2(-1.0, -1.0);
+	}
+}
+// for parallel gores
+else if (interceptionType == 0)
+{	
+	// find which gore we are in
+	currentGore = int(coords.x / goreWidth);
+	// and find its center
+	float midOfGore = (float(currentGore) + 0.5)*goreWidth;
+	// calculate how much we need to shift
+	float shift = midOfGore - 0.5;
+	// and shift now
+	newX = newX - shift;
+}
+
+// project from gore to equirectangular
+newX = (newX-0.5)/cos((newY-0.5)*PI)+goreWidth/2.0;
+if (newX < 0.0 || newX > goreWidth)
+	return vec2(-1.0, -1.0); // this point should be blank
+	
+// shift the gore to its previous location
+float midOfGore = (float(currentGore))*goreWidth;
+newX = newX + midOfGore;
+
+// apply new central merdian
+newX = newX + meridian / 360.0;
+if (newX < 0.0)
+{
+	newX = 1.0 + newX;
+}
+else if (newX > 1.0)
+{
+	newX = newX - 1.0;
+}
+return vec2(newX, newY);
+
+
+
+...SECTION FROM-CALCULATIONS:
+const float PI = 3.14159265359;
+float newX = coords.x;
+float newY = coords.y;
+float goreWidth = 1.0/goresNumber;
+
+// apply new central merdian
+newX = newX - meridian / 360.0;
+if (newX < 0.0)
+{
+	newX = 1.0 + newX;
+}
+else if (newX > 1.0)
+{
+	newX = newX - 1.0;
+}
+
+// find in which gore we are
+int currentGore = int(newX / goreWidth);
+
+// shift the gore to the left edge (meridian will be on the left edge)
+float midOfGore = (float(currentGore) + 0.5)*goreWidth;
+newX = newX - midOfGore;
+
+// project to sinusoidal
+newX = newX*cos((newY-0.5)*PI);
+
+// shift to center
+newX = newX + 0.5;
+
+// for concentric gores
+if (interceptionType == 1)
+{
+	// shrink the gore to 1/2 of height
+	newY = newY * 0.5;
+
+	// rotation around center
+	float angleBetweenGores = 2.0*PI/float(goresNumber);
+	float angle = angleBetweenGores * float(currentGore);
+	
+	// rotate anti-clockwise
+	float tmpX = 0.5 + (newX-0.5)*cos(-angle) + (newY-0.5)*sin(-angle);
+	newY = 0.5 - (newX-0.5)*sin(-angle) + (newY-0.5)*cos(-angle);
+	newX = tmpX;
+}
+// for parallel gores
+else if (interceptionType == 0)
+{	
+	// shift point to proper place
+	newX = newX - 0.5 + midOfGore;
+}
+
+return vec2(newX, newY);
+
+...SECTION TO-FORM:
+Pick type of interception <select name="interceptionType">
+<option>Parallel gores</option>
+<option>Daisy petal</option>
+</select><br>
+Number of gores <input type="number" name="goresNumber" min="2" value="2"><br>
+Pick the central meridian <input name="meridian" type="number" min="-180" max="180">
+
+...SECTION FROM-FORM:
+Pick type of interception <select name="interceptionType">
+<option>Parallel gores</option>
+<option>Contentric gores</option>
+</select><br>
+Number of gores <input type="number" name="goresNumber" min="2" value="2"><br>
+Pick the central meridian <input name="meridian" type="number" min="-180" max="180">
+
+...SECTION OUTPUT-WIDTH-CALCULATIONS:
+switch (getUniformFromArray(uniforms, 'interceptionType').value)
+{
+	case 0:		
+		return meridian*2;
+		break;
+	case 1:
+		return meridian*2;
+		break;
+}
+
+...SECTION OUTPUT-HEIGHT-CALCULATIONS:
+switch (getUniformFromArray(uniforms, 'interceptionType').value)
+{
+	case 0:
+		return meridian;
+		break;
+	case 1:
+		return meridian*2;
+		break;
+}
+
+...SECTION MERIDIAN-LENGTH-CALCULATIONS:
+switch (getUniformFromArray(uniforms, 'interceptionType').value)
+{
+	case 0:		
+		return width/2;
+		break;
+	case 1:
+		return width;
+		break;
+}

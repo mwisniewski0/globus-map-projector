@@ -1,0 +1,47 @@
+...SECTION TO-CALCULATIONS:
+// project from sinusoidal to equirectangular
+float newXCoord = (coords.x-0.5)/cos((coords.y-0.5)*3.14159265359)+0.5;
+if (newXCoord < 0.0 || newXCoord > 1.0)
+	return vec2(-1.0, -1.0); // this point isn't projected
+else
+{
+	// apply new central merdian
+	newXCoord = newXCoord + meridian / 360.0;
+	if (newXCoord < 0.0)
+	{
+	    newXCoord = 1.0 + newXCoord;
+	}
+	else if (newXCoord > 1.0)
+	{
+	    newXCoord = newXCoord - 1.0;
+	}
+	return vec2(newXCoord, coords.y);
+}
+
+...SECTION FROM-CALCULATIONS:
+// apply new central meridian
+float newXCoord = coords.x - meridian / 360.0;
+if (newXCoord < 0.0)
+{
+	newXCoord = 1.0 + newXCoord;
+}
+else if (newXCoord > 1.0)
+{
+	newXCoord = newXCoord - 1.0;
+}
+// project it to sinusoidal projection
+newXCoord = (newXCoord-0.5)*cos((coords.y-0.5)*3.14159265359)+0.5;
+return vec2(newXCoord, coords.y);
+
+...SECTION TO-FORM:
+Pick central meridian (from -180 to 180): <input name="meridian" type="number" min="-180" max="180">
+
+...SECTION FROM-FORM:
+Pick central meridian (from -180 to 180): <input name="meridian" type="number" min="-180" max="180">
+
+...SECTION OUTPUT-WIDTH-CALCULATIONS:
+return meridian*2;
+...SECTION OUTPUT-HEIGHT-CALCULATIONS:
+return meridian;
+...SECTION MERIDIAN-LENGTH-CALCULATIONS:
+return width/2;

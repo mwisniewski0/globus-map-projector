@@ -1,0 +1,819 @@
+<!--
+Copyright (c) 2015, Michał Wiśniewski, http://www.winski.net/
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.!-->
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+</head>
+<body onresize=""><div id="content">
+<script>
+// used projections
+var fromProjection = null;
+var toProjection = null;
+
+function loadTextFromUrl(url)
+{
+    // download a url
+	var query = new XMLHttpRequest(); 
+	query.open("GET",url, false); 
+	query.send(); 
+	
+	// return its content
+	return query.responseText;
+}
+
+function prepareFromProjectionUI()
+{
+	document.getElementById("fromProjectionForm").innerHTML = fromProjection.from_form;
+	// if we're in iframe, our parent will be able to use this onresize
+	document.body.onresize();
+}
+
+function prepareToProjectionUI()
+{
+	document.getElementById("toProjectionForm").innerHTML = toProjection.to_form;
+	// if we're in iframe, our parent will be able to use this onresize
+	document.body.onresize();
+}
+
+function getUniformsFromForm(formId)
+{
+	// We'll hold all uniforms here. Uniform will have: value, name, and type
+	var uniforms = [];
+
+	// we will extract data from this form
+	var form = document.getElementById(formId);
+	
+	// extracting input fields
+	var inputFields = form.getElementsByTagName('input');
+	for (var i = 0; i < inputFields.length; ++i)
+	{
+		// handle input fields
+		switch (inputFields[i].type.toLowerCase())
+		{
+			case 'number':
+				uniforms.push({'value':floatToString(inputFields[i].value),
+					'name':inputFields[i].name,'type':'float'});
+				break;
+			case 'range':
+				uniforms.push({'value':floatToString(inputFields[i].value),
+					'name':inputFields[i].name,'type':'float'});
+				break;
+			case 'color':
+				// we need to parse inputFields[i].value into an array
+				uniforms.push({'value':parseColorIntoArray(inputFields[i].value),
+							   'name':inputFields[i].name,'type':'vec4'});
+				break;
+			case 'checkbox':
+				// we will use literals to represent false/true
+				uniforms.push({'value':(inputFields[i].checked ? 'true' : 'false'),'name':inputFields[i].name,'type':'bool'});
+				break;
+			case 'radio':
+				// We will return index of selected radio
+				// we check if this radio group was found before
+				var radioUniform = getUniformFromArray(uniforms, inputFields[i].name);
+				if (radioUniform == null)
+				{
+					// there wasn't any element of this radio group found before, we have to create
+					// new uniform
+					// value = -1, because we haven't found selected radio yet
+					// ofThisNameFound = 0: we will count radios of this name to know, which index is selected
+					radioUniform = {'value':-1,'name':inputFields[i].name,'type':'int','ofThisNameFound':0};
+					uniforms.push(radioUniform);
+				}
+				// new radio with this name found, so we increment counter of found radios
+				radioUniform.ofThisNameFound++;
+				
+				if (inputFields[i].checked)
+				{
+					// we found the checked radio
+					radioUniform.value = radioUniform.ofThisNameFound - 1;
+				}
+				break;
+		}
+	}
+	
+	// extracting data from <select>s
+	var selects = form.getElementsByTagName('select');
+	for (var i = 0; i < selects.length; ++i)
+	{
+		// value is index of the selected option
+		uniforms.push({'value':selects[i].selectedIndex,'name':selects[i].name,'type':'int'});
+	}
+	
+	return uniforms;
+}
+
+function floatToString(x)
+{
+	// we want to have the .0 ending when x is whole number
+	return x % 1 === 0 ? "" + x + ".0" : "" + x;
+}
+
+function getUniformFromArray(array, name)
+{
+	// finds uniform with given name
+	for (var i = 0; i < array.length; ++i)
+	{
+		if (array[i].name == name)
+			return array[i];
+	}
+	return null;
+}
+
+function parseColorIntoArray(color)
+{
+	// Hex colors
+	if (color.charAt(0) == '#')
+	{
+		var color1;
+		var color2;
+		var color3;
+		var alpha = 1.0;
+		
+		// short hex notation (#RGB)
+		if (color.length == 4)
+		{
+			// 15 is maximum value for a color, so when we divide by 15, we get number from 0 to 1
+			color1 = parseInt("0x" + color.charAt(1))/15.0;
+			color2 = parseInt("0x" + color.charAt(2))/15.0;
+			color3 = parseInt("0x" + color.charAt(3))/15.0;
+		}
+		else if (color.length == 7) // normal hex notation (#RRGGBB)
+		{
+			// 255 is maximum value for a color, so when we divide by 255, we get number from 0 to 1
+			color1 = parseInt("0x" + color.substr(1,2))/255.0;
+			color2 = parseInt("0x" + color.substr(3,2))/255.0;
+			color3 = parseInt("0x" + color.substr(5,2))/255.0;
+		}
+		else if (color.length == 9) // hex with alpha (#RRGGBBAA)
+		{
+			// 255 is maximum value for a color, so when we divide by 255, we get number from 0 to 1
+			color1 = parseInt("0x" + color.substr(1,2))/255.0;
+			color2 = parseInt("0x" + color.substr(3,2))/255.0;
+			color3 = parseInt("0x" + color.substr(5,2))/255.0;
+			alpha = parseInt("0x" + color.substr(7,2))/255.0;
+		}
+		return [color1, color2, color3, alpha];		
+	}
+	else
+	{
+		var colors = color.split(",").trim();
+		
+		// first element has "rgba("
+		colors[0] = colors[0].substring(5);
+		
+		// last element will end with ")"
+		colors[colors.length - 1]=colors[colors.length - 1].substring(0,colors[colors.length - 1].length - 1);
+
+		if (colors.length == 3)
+			colors.push(1.0);
+			
+		return colors;
+	}
+}
+
+function prepareFragmentShader()
+{
+	
+}
+
+function prepareFragmentShaderSource()
+{	
+	var fromUniforms = getUniformsFromForm('fromProjectionForm');
+	var toUniforms = getUniformsFromForm('toProjectionForm');
+
+	var fromSource = fromProjection.from_calculations;
+	var toSource = toProjection.to_calculations;
+	
+	// add uniforms
+	// we won't actually pass them as uniforms, as we know their values when we prepare source
+	// we will simply declare them as constants
+	for (var i = 0; i < fromUniforms.length; ++i)
+	{
+		// color is a special type
+		if (fromUniforms[i].type == 'vec4')
+		{
+			fromSource = 'const ' + fromUniforms[i].type + ' ' +fromUniforms[i].name
+				 + ' = vec4(' + fromUniforms[i].value[0] + ', ' + fromUniforms[i].value[1] + ', '
+				 + fromUniforms[i].value[2] + ', '+ fromUniforms[i].value[3] + ');\n' + fromSource;
+		}
+		else
+		{
+			fromSource = 'const ' + fromUniforms[i].type + ' ' + fromUniforms[i].name
+				 + ' = ' + fromUniforms[i].value + ';\n' + fromSource;
+		}
+	}
+	
+	// same for toSource
+	for (var i = 0; i < toUniforms.length; ++i)
+	{
+		// color is a special type - we cannot simply use javascript's built-in toString.
+		if (toUniforms[i].type == 'vec4')
+		{
+			toSource = 'const ' + toUniforms[i].type + ' ' +toUniforms[i].name
+				 + ' = vec4(' + floatToString(toUniforms[i].value[0]) + ', ' +
+				 floatToString(toUniforms[i].value[1]) + ', ' + floatToString(toUniforms[i].value[2])
+				 + ', '+ floatToString(toUniforms[i].value[3]) + ');\n' + toSource;
+		}
+		else
+		{
+			toSource = 'const ' + toUniforms[i].type + ' ' +toUniforms[i].name
+				 + ' = ' + toUniforms[i].value + ';\n' + toSource;
+		}
+	}
+	
+	// beginning is the same for every shader, so is main()
+	var source = 'precision mediump float;\n\
+				uniform sampler2D image;\n\
+				uniform vec2 textureSize;\n\
+				uniform vec4 backgroundColor;\n\
+				\n\
+				varying vec2 texCoord;\n' +
+				'vec2 projectToEquirectangular(vec2 coords) {\n'
+				+ toSource + '\n}\n\n' +
+				'vec2 projectFromEquirectangular(vec2 coords) {\n\
+				if (coords.x < 0.0 || coords.y < 0.0) return coords;\n'
+				+ fromSource + '\n}\n\n' +
+				'void main() {\n\
+				vec4 color = backgroundColor;\n\
+				vec2 sourceCoords = projectFromEquirectangular(projectToEquirectangular(texCoord));\n\
+				\n\
+				if (sourceCoords.x >= 0.0 && sourceCoords.y >= 0.0)\n\
+				color = texture2D(image, sourceCoords);\n\
+				gl_FragColor = color;\n\
+				}';
+	
+	return source;
+}
+
+function parseProjectionSource(source)
+{
+	// we will write all the parsed sections here
+	var result = {};
+
+	// split source into sections
+	// If we want our delimiter to be longer than one character
+	// we need to use regex expressions, that's why we use slashes
+	var sections = source.split(/...SECTION/);
+	
+	for (var sectionIndex = 0; sectionIndex < sections.length; ++sectionIndex)
+	{
+		var currentSection = sections[sectionIndex];
+		
+		var sectionTypeAndContent = explodeIntoSectionTypeAndContent(currentSection);
+		// check for invalid section
+		if (sectionTypeAndContent == null)
+			continue;
+		
+		var sectionType = sectionTypeAndContent[0];
+		var sectionContent = sectionTypeAndContent[1];
+		
+		// fill the fields of parsed projection
+		switch (sectionType)
+		{
+			case 'TO-CALCULATIONS':
+				if (typeof result.to_calculations !== 'undefined')
+					throw "Multiple TO-CALCULATIONS sections";
+			    result.to_calculations = sectionContent;
+				break;
+			case 'FROM-CALCULATIONS':
+				if (typeof result.from_calculations !== 'undefined')
+					throw "Multiple TO-CALCULATIONS sections";
+				result.from_calculations = sectionContent;
+				break;
+			case 'TO-FORM':
+				if (typeof result.to_form !== 'undefined')
+					throw "Multiple TO-FORM sections";
+				result.to_form = sectionContent;
+				break;
+			case 'FROM-FORM':
+				if (typeof result.from_form !== 'undefined')
+					throw "Multiple FROM-FORM sections";
+				result.from_form = sectionContent;
+				break;
+			case 'OUTPUT-WIDTH-CALCULATIONS':
+				if (typeof result.output_width_calculations !== 'undefined')
+					throw "Multiple OUTPUT-WIDTH-CALCULATIONS sections";
+				result.output_width_calculations = sectionContent;
+				break;
+			case 'OUTPUT-HEIGHT-CALCULATIONS':
+				if (typeof result.output_height_calculations !== 'undefined')
+					throw "Multiple OUTPUT-HEIGHT-CALCULATIONS sections";
+				result.output_height_calculations = sectionContent;
+				break;
+			case 'MERIDIAN-LENGTH-CALCULATIONS':
+				if (typeof result.meridian_length_calculations !== 'undefined')
+					throw "Multiple MERIDIAN-LENGTH-CALCULATIONS sections";
+				result.meridian_length_calculations = sectionContent;
+				break;
+		}
+	}
+	
+	// all sections must be set
+	if (typeof result.to_calculations === 'undefined')
+	{
+		alert("No TO-CALCULATIONS section");
+		throw "No TO-CALCULATIONS section";
+	}
+	if (typeof result.from_calculations === 'undefined')
+	{
+		alert("No FROM-CALCULATIONS section");
+		throw "No FROM-CALCULATIONS section";
+	}
+	if (typeof result.to_form === 'undefined')
+	{
+		alert("No TO-FORM section");
+		throw "No TO-FORM section";
+	}
+	if (typeof result.from_form === 'undefined')
+	{
+		alert("No FROM-FORM section");
+		throw "No FROM-FORM section";
+	}
+	if (typeof result.output_width_calculations === 'undefined')
+	{
+		alert("No OUTPUT-WIDTH-CALCULATIONS section");
+		throw "No OUTPUT-WIDTH-CALCULATIONS section";
+	}
+	if (typeof result.output_height_calculations === 'undefined')
+	{
+		alert("No OUTPUT-HEIGHT-CALCULATIONS section");
+		throw "No OUTPUT-HEIGHT-CALCULATIONS section";
+	}
+	if (typeof result.meridian_length_calculations === 'undefined')
+	{
+		alert("No MERIDIAN-LENGTH-CALCULATIONS section");
+		throw "No MERIDIAN-LENGTH-CALCULATIONS section";
+	}
+	
+	return result;
+}
+
+function explodeIntoSectionTypeAndContent(section)
+{
+	// we will find fragment of text that contains section type
+	var indexOfFirstCharacterOfSectionType = -1;
+	var indexOfLastCharacterOfSectionType = -1;
+	
+	// find the first non-white character in the section
+	for (var i = 0; i < section.length; ++i)
+	{
+		// to see if character is white, we'll add it to a string, and use trim function
+		// which will remove all the empty characters.
+		var str = "" + section.charAt(i);
+		str = str.trim();
+		
+		// if the string is empty we had a white character
+		if (str.length == 0)
+			continue;
+		else
+		{
+			// we found the first non-white character
+			indexOfFirstCharacterOfSectionType = i;
+			break;
+		}
+	}
+	
+	// Finding the first non-white character before the colon (:)
+	
+	// Find the colon
+	var colonIndex = -1;
+	for (var i = 0; i < section.length; ++i)
+	{
+		if (section.charAt(i) == ':')
+		{
+			colonIndex = i;
+			break;
+		}
+	}
+	
+	// if there was no colon, colonIndex will be -1
+	if (colonIndex == -1)
+	{
+		// This is not a valid section
+		return null;
+	}
+	
+	// find the first non-white character
+	for (var i = colonIndex - 1; i >= 0; --i)
+	{
+		// to see if character is white, we'll add it to a string, and use trim function
+		// which will remove all the empty characters.
+		var str = "" + section.charAt(i);
+		str = str.trim();
+		
+		// if the string is empty we had a white character
+		if (str.length == 0)
+			continue;
+		else
+		{
+			// we found a non-white character
+			indexOfLastCharacterOfSectionType = i;
+			break;
+		}
+	}
+	
+	// if we didn't find a non-white character, indexOfLastCharacterOfSectionType will be -1
+	if (indexOfLastCharacterOfSectionType == -1)
+	{
+		// This is not a valid section
+		return null;
+	}
+	
+	return [section.substring(indexOfFirstCharacterOfSectionType, indexOfLastCharacterOfSectionType+1),
+			section.substring(colonIndex+1)];
+}
+
+</script>
+<script>
+var gl;
+var canvas = document.getElementById("canvas");
+
+function getTextFromDOM(id)
+{
+    return document.getElementById(id).text;
+}
+
+function initGL()
+{
+	// Get A WebGL context
+	canvas = document.getElementById("canvas");
+	var contextNames = ["webgl", "experimental-webgl"];
+	gl = null;
+	for (var i = 0; i < contextNames.length; ++i)
+	{
+		try
+		{
+		    gl = canvas.getContext(contextNames[i]);
+		}
+		catch(e) {}
+		if (gl != null)
+		{
+		    break;
+		}
+	}
+	if (gl == null)
+	{
+	    alert("WebGL not supported.\nGlobus won't work\nTry using browsers such as Mozilla Firefox, Google Chrome or Opera");
+        return;
+	}	
+}
+
+function createShaderFromText(gl, type, source)
+{
+	var shader = gl.createShader(type);
+	gl.shaderSource(shader, source);
+	gl.compileShader(shader);
+	
+	// check for errors during compilation
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS))
+    {
+        error = gl.getShaderInfoLog(shader);
+		// show it to the user
+		alert("SHADER COMPILATION RETURNED AN ERROR:\n" + error + "\n\n\nShader source:\n" + source);
+        gl.deleteShader(shader);
+        return null;
+    }
+	return shader;
+}
+
+function prepareWebGLProgram(gl)
+{
+	// load shaders
+	vertexShader = createShaderFromText(gl, gl.VERTEX_SHADER, getTextFromDOM("vertex-shader"));
+    fragmentShader = createShaderFromText(gl, gl.FRAGMENT_SHADER, prepareFragmentShaderSource());
+	
+	// and put them in GLSL program
+    program = gl.createProgram();
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+	
+	// check for linker errors
+	if (!gl.getProgramParameter(program, gl.LINK_STATUS))
+	{
+		error = gl.getProgramInfoLog (program);
+		
+		// show it to the user
+		alert("PROGRAM LINKING RETURNED AN ERROR:\n" + error);
+		gl.deleteProgram(program);
+		return null;
+    }
+	
+	return program;
+}
+
+function project(image, backgroundR, backgroundG, backgroundB, backgroundA)
+{	
+    // prepare shaders 
+    var program = prepareWebGLProgram(gl);
+    gl.useProgram(program);  
+
+	// find attributes' locations
+	var positionLocation = gl.getAttribLocation(program, "currentPixel");
+    var texelDataLocation = gl.getAttribLocation(program, "texelCoord");
+	
+    // prepare texture coordinates for vertex shader
+    var texelBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, texelBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        0.0,  0.0,
+        1.0,  0.0,
+        0.0,  1.0,
+        1.0,  1.0]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(texelDataLocation);
+    gl.vertexAttribPointer(texelDataLocation, 2, gl.FLOAT, false, 0, 0);
+
+	// prepare texture
+    var texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+  
+    // find uniforms' locations
+    var textureSizeLocation = gl.getUniformLocation(program, "textureSize");
+    var backgroundColorLocation = gl.getUniformLocation(program, "backgroundColor");
+    var resolutionLocation = gl.getUniformLocation(program, "resolution");
+
+    // set uniforms
+    gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
+    gl.uniform2f(textureSizeLocation, image.width, image.height);
+    gl.uniform4f(backgroundColorLocation, backgroundR, backgroundG, backgroundB, backgroundA);  
+
+    // prepare buffer with rectangle vertices
+    var positionBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+	gl.enableVertexAttribArray(positionLocation);
+	gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+		0, 0,
+		canvas.width, 0,
+		0, canvas.height,
+		canvas.width, canvas.height]), gl.STATIC_DRAW);
+	
+	// set the viewport, so our render will be of the size of canvas
+	gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+	
+	// Draw the projection
+	gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+	// clean up
+	gl.deleteTexture(texture);
+	gl.deleteBuffer(positionBuffer);
+	gl.deleteBuffer(texelBuffer);
+	gl.deleteProgram(program);
+}
+
+</script>
+
+<!-- vertex shader is the same for every projection -->
+<script id="vertex-shader" type="x-shader/x-vertex">
+attribute vec2 currentPixel;
+attribute vec2 texelCoord;
+uniform vec2 resolution;
+varying vec2 texCoord;
+
+void main()
+{
+	vec2 resultantPosition = currentPixel;   
+    resultantPosition = currentPixel / resolution; // change from pixels to (0, 1) range
+    resultantPosition = resultantPosition - vec2(0.5,0.5); // change it to (-0.5, 0.5)
+	resultantPosition = resultantPosition * 2.0; // change it to (-1, 1)
+	resultantPosition = vec2(resultantPosition.x, -resultantPosition.y); // flip y axis (so -1 is up and 1 is down)
+	
+    gl_Position = vec4(resultantPosition, 0, 1); 
+
+    // pass texel position to fragmentShader
+    texCoord = texelCoord;
+}
+</script>
+<big>If you came here just to make your own globe, click button below, it will automatically select projections:
+</big><br>
+<button onclick="document.getElementById('toProjectionSelect').selectedIndex=5;
+loadProjectionFromSelector(getElementById('toProjectionSelect'));
+document.getElementById('fromProjectionSelect').selectedIndex=0;
+loadProjectionFromSelector(getElementById('fromProjectionSelect'));">I want to make a globe!</button><br><br>
+Pick image to project: <input type="file" id="imageFilePicker"><br><br>
+Project from: <select id="fromProjectionSelect">
+<option value="projections/equirect">Equirectangular</option>
+<option value="projections/azimuthal">Azimuthal</option>
+<option value="projections/orthographic">Orthographic</option>
+<option value="projections/sinusoidal">Sinusoidal</option>
+<option value="projections/sinusoidal_intercepted">Sinusoidal intercepted</option>
+<option value="projections/mercator">Mercator</option>
+</select><br>
+<!-- we put our <input>s in <form>s to be able to reset them with form.reset() !-->
+Or pick your own FROM projection:
+<form id="fromFilePickerForm"><input type="file" id="filePickerFrom"></form><br><br>
+Project to: <select id="toProjectionSelect">
+<option value="projections/equirect">Equirectangular</option>
+<option value="projections/azimuthal">Equidistant Azimuthal</option>
+<option value="projections/lambert_azimuthal">Lambert Azimuthal Equal-Area</option>
+<option value="projections/orthographic">Orthographic</option>
+<option value="projections/sinusoidal">Sinusoidal</option>
+<option value="projections/sinusoidal_intercepted">Sinusoidal intercepted</option>
+<option value="projections/mercator">Mercator</option>
+<option value="projections/transverse_mercator">Transverse Mercator</option>
+<option value="projections/daisy">Daisy petal</option>
+</select><br>
+Or pick your own TO projection:
+<form id="toFilePickerForm"><input type="file" id="filePickerTo"><form>
+<br><br><br>
+
+<big>Project from:</big>
+<div id="fromProjectionForm"></div>
+<br>
+<big>Project to:</big>
+<div id="toProjectionForm"></div>
+<br><br><input type="button" id="submit" value="Project!">
+<br><br>
+<canvas id="canvas" width="1" height="1"></canvas>
+<script>
+initGL();
+var imageToProcess;
+
+function makeRender()
+{
+    var imageWidth = imageToProcess.width;
+	var imageHeight = imageToProcess.height;
+	
+	// we use user provided functions to calculate width and height
+	// of output image
+	
+	// we need to provide uniforms from the form to those functions
+	var toUniforms = getUniformsFromForm('toProjectionForm');
+	var fromUniforms = getUniformsFromForm('fromProjectionForm');
+	
+	// calculating length of meridian based on image size
+	var meridianLength = eval("(function(width, height, uniforms) {"
+		+ fromProjection.meridian_length_calculations + "})(imageWidth, imageHeight, fromUniforms)");
+	
+	// calculating size of canvas based on length of meridian
+    document.getElementById('canvas').width = eval("(function(meridian, uniforms) {"
+		+ toProjection.output_width_calculations + "})(meridianLength, toUniforms)");
+	document.getElementById('canvas').height = eval("(function(meridian, uniforms) {"
+		+ toProjection.output_height_calculations + "})(meridianLength, toUniforms)");
+
+    project(imageToProcess);
+	
+	// Some very easy analytics for me - just want to know if you use it :)
+	var xmlHttp = new XMLHttpRequest();
+    xmlHttp.open("GET", "countProjections.php", false );
+    xmlHttp.send(null);
+	
+	// if we're in iframe, our parent will be able to use this onresize
+	document.body.onresize();
+}
+</script>
+<script>
+function loadProjectionFromSelector(selector)
+{
+	// options' values contain urls to projections
+	var projection = parseProjectionSource(loadTextFromUrl(
+			selector.options[selector.selectedIndex].value));
+		
+	// we need to check which projection was changed
+	if (selector.id == "fromProjectionSelect")
+	{			
+		fromProjection = projection;
+		
+		// updating UI
+		prepareFromProjectionUI();
+		
+		// clearing file picker
+		document.getElementById('fromFilePickerForm').reset();
+	}
+	else if (selector.id == "toProjectionSelect")
+	{
+		toProjection = projection;
+		
+		// updating UI
+		prepareToProjectionUI();
+		
+		// clearing file picker
+		document.getElementById('toFilePickerForm').reset();	
+	}
+}
+function onSelectorChange(event)
+{
+	loadProjectionFromSelector(event.target);
+}
+
+// Load projections, when user picks them from select
+document.getElementById('fromProjectionSelect').onchange = onSelectorChange;
+document.getElementById('toProjectionSelect').onchange = onSelectorChange;
+
+
+// initial loading
+try
+{
+	loadProjectionFromSelector(document.getElementById('toProjectionSelect'));
+	loadProjectionFromSelector(document.getElementById('fromProjectionSelect'));
+}
+catch (ex)
+{
+	// there were problems loading the projection
+}
+
+function handleFileSelect(event)
+{
+	var file = event.target.files[0];
+
+	// Only process image files.
+	if (!file.type.match('image.*'))
+	{
+		alert("Only image files!");
+		return;
+	}
+
+	var reader = new FileReader();
+
+	// Load the image to process
+	reader.onload = function(fileLoadedEvent)
+	{
+		imageToProcess = new Image();
+		imageToProcess.src = fileLoadedEvent.target.result;
+		
+		// enable projecting
+		imageToProcess.onload = function()
+		{
+			document.getElementById('submit').onclick = function(){makeRender();};
+		};       
+	};
+
+	// Read in the image file as a data URL.
+	reader.readAsDataURL(file);
+}
+
+document.getElementById('imageFilePicker').addEventListener('change', handleFileSelect, false);
+  
+function loadProjectionFromFilePicker(event)
+{
+    // We load the file to read it
+    var file = event.target.files[0]; // There is only one file selected, so we simply pick first file
+    var reader = new FileReader();
+
+    // When the file is loaded, copy its content into currentProjectionSource
+    reader.onload = function(fileLoadedEvent)
+	{
+		var projection = parseProjectionSource(loadTextFromUrl(fileLoadedEvent.target.result));
+		
+		// we need to check which projection was changed
+		if (event.target.id == "filePickerFrom")
+		{			
+			fromProjection = projection;
+			
+			// updating UI
+			prepareFromProjectionUI();
+			
+			// clear <select>
+			document.getElementById("fromProjectionSelect").selectedIndex = -1;
+		}
+		else if (event.target.id == "filePickerTo")
+		{
+			toProjection = projection;
+			
+			// updating UI
+			prepareToProjectionUI();
+			
+			// clear <select>
+			document.getElementById("toProjectionSelect").selectedIndex = -1;
+		}
+    };
+
+    // Read the file to a temporary URL
+    reader.readAsDataURL(file);
+}
+// call loadProjectionFromFilePicker() whenever user loads a file
+document.getElementById('filePickerTo').addEventListener('change', loadProjectionFromFilePicker, false);
+document.getElementById('filePickerFrom').addEventListener('change', loadProjectionFromFilePicker, false);
+</script>
+</div>
+</body>
+</html>

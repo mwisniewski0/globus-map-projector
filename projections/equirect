@@ -1,0 +1,26 @@
+...SECTION TO-CALCULATIONS:
+float newXCoord = coords.x + meridian / 360.0;
+if (newXCoord < 0.0)
+    newXCoord = newXCoord + 1.0;
+else if (newXCoord > 1.0)
+    newXCoord = newXCoord - 1.0;
+
+return vec2(newXCoord, coords.y);
+...SECTION FROM-CALCULATIONS:
+float newXCoord = coords.x - meridian / 360.0;
+if (newXCoord < 0.0)
+    newXCoord = newXCoord + 1.0;
+else if (newXCoord > 1.0)
+    newXCoord = newXCoord - 1.0;
+
+return vec2(newXCoord, coords.y);
+...SECTION TO-FORM:
+Pick central meridian (from -180 to 180): <input name="meridian" type="number" min="-180" max="180">
+...SECTION FROM-FORM:
+Pick central meridian (from -180 to 180): <input name="meridian" type="number" min="-180" max="180">
+...SECTION OUTPUT-WIDTH-CALCULATIONS:
+return meridian*2;
+...SECTION OUTPUT-HEIGHT-CALCULATIONS:
+return meridian;
+...SECTION MERIDIAN-LENGTH-CALCULATIONS:
+return width/2;

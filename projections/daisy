@@ -1,0 +1,216 @@
+Flower petal projection
+
+...SECTION TO-CALCULATIONS:
+const float PI = 3.141592653589793238462643383279502884197169399;
+
+// check which half we're rendering
+bool leftHalfProcessing = coords.x < 0.5;
+
+// stretch half to entire width
+coords.x = coords.x * 2.0;
+if (!leftHalfProcessing)
+{
+   coords.x = coords.x - 1.0;
+}
+
+// add room for surplus
+float surplusScale = 0.0;
+if (connectHalves)
+	surplusScale = (90.0+surplusY)/90.0;
+else
+	surplusScale = (90.0+surplusY+1.0)/90.0; // +1 is added, so the halves are separated
+
+coords.x *= surplusScale;
+if (connectHalves)
+	if (leftHalfProcessing)
+		coords.x -= surplusY/90.0;
+	else
+		coords.x += surplusY/90.0;
+else
+	coords.x -= surplusY/90.0/2.0;
+coords.y *= surplusScale;
+coords.y -= surplusY/90.0/2.0;
+
+float newX = coords.x;
+float newY = coords.y;
+
+// if we are in the center, we perform lambert azimuthal projection:
+newX -= 0.5;
+newY -= 0.5;
+newX *= 2.0;
+newY *= 2.0;
+
+float distanceFromCenterSquared = newX*newX + newY*newY;
+if (distanceFromCenterSquared < lambertBeginning*lambertBeginning/8100.0) // (lambertBeginning/90)^2
+{
+	// pick a scale to match transverse mercator
+	float scale = 90.0*sqrt(2.0*(1.0-cos(lambertBeginning/180.0*PI)))/lambertBeginning;
+	newX *= scale;
+	newY *= scale;
+
+	// lambert azimuthal projection
+	distanceFromCenterSquared = newX*newX + newY*newY;
+	
+	float phi = acos(1.0 - distanceFromCenterSquared*0.5);
+	float lambda = atan(abs(newX/newY));
+
+	if (newX > 0.0 && newY < 0.0)
+		newX = PI - lambda;
+	else if (newX > 0.0 && newY > 0.0)
+		newX = lambda;
+	else if (newX < 0.0 && newY > 0.0)
+		newX = 2.0 * PI - lambda;
+	else if (newX < 0.0 && newY < 0.0)
+		newX = PI + lambda;
+	
+	newY = phi;
+	newY /= PI;
+	newX /= 2.0*PI;
+	
+	// rotate 90 degrees
+	if (leftHalfProcessing)
+	{
+		newX += 0.25;
+		if (newX > 1.0)
+			newX -= 1.0;
+	}
+	else
+	{
+		newX -= 0.25;
+		if (newX < 0.0)
+			newX += 1.0;
+	}
+	
+	if (leftHalfProcessing)
+		return vec2(newX, newY);
+	else
+		return vec2(1.0 - newX, 1.0-newY);
+}
+else
+{
+    float goreWidth = 2.0*PI/goresNumber;
+	
+	if (!leftHalfProcessing)
+	{
+		coords.x = 1.0 - coords.x;
+	}
+	
+	newX = (coords.x-0.5)*2.0;
+	newY = (coords.y-0.5)*2.0;
+	
+	// determine the gore
+	float directionAngle = atan(abs(newY/newX)); // direction of the line connecting origin (0, 0) and projected point
+	if  (newX > 0.0 && newY < 0.0)
+		directionAngle = PI/2.0 - directionAngle;
+	else if (newX > 0.0 && newY > 0.0)
+		directionAngle = PI/2.0 + directionAngle;
+	else if (newX < 0.0 && newY > 0.0)
+		directionAngle = 1.5 * PI - directionAngle;
+	else if (newX < 0.0 && newY < 0.0)
+		directionAngle = 1.5*PI + directionAngle;
+		
+	float angularDistanceToFirstGore = (directionAngle-(PI/2.0 - goreWidth/2.0));
+	if (angularDistanceToFirstGore > PI*2.0)
+		angularDistanceToFirstGore -= PI*2.0;
+	else if (angularDistanceToFirstGore < 0.0)
+		angularDistanceToFirstGore += PI*2.0;
+	
+	int goreIndex = int(angularDistanceToFirstGore/goreWidth);
+	
+	// rotation around center
+	float angle = goreWidth * float(goreIndex);
+	
+	newX = 0.5 + (coords.x-0.5)*cos(angle) + (coords.y-0.5)*sin(angle);
+	newY = 0.5 - (coords.x-0.5)*sin(angle) + (coords.y-0.5)*cos(angle);
+	
+	// put the texel in the right place in transverse mercator
+	newX = 1.5 - newX;
+	newY = 1.0 - newY;
+	newX -= 0.5; newY-= 0.5; newX /= 2.0; newY /= 2.0; newX += 0.5; newY += 0.5;
+	
+	
+	// do standard mercator
+	newY -= 0.5;
+	newY *= 2.0;
+	newY *= 180.0;
+
+	newY = 180.0/PI * (2.0 * atan(exp(newY*PI/180.0)) - PI/2.0);
+	newY /= 180.0;
+	newY += 0.5;	
+	// rotate in three steps:
+	// step 1: calculate point's position in 3D space
+
+	// change newX and newY to degrees
+	newX -= 0.5;
+	newX *= 2.0 * PI;
+	newY -= 0.5;
+	newY *= PI;
+
+	float y3d = sin(newY);
+	float c3d = cos(newY);
+	float z3d = cos(newX)*c3d;
+	float x3d = sin(newX)*c3d;
+
+	// step 2: rotate 90 degrees
+	// rotate clockwise
+	float oldY = y3d;
+	y3d = -x3d;
+	x3d = oldY;
+
+	// step 3: turn back into a sphere
+	// keep in mind that the original signs have been lost along the way
+	// we'll need to determine it
+	newY = asin(y3d);
+	c3d = cos(newY);
+	newX = abs(acos(z3d/c3d)); 
+	if (x3d < 0.0)
+		newX = -newX;
+		
+	if (abs(newX) - surplusX/180.0*PI > PI/goresNumber) // derived from: abs(newX)*2 > PI*2/goresNumber
+		return vec2(-1,-1);
+	if (newY > surplusY/180.0*PI)
+		return vec2(-1,-1);
+	
+	newX /= 2.0*PI;
+	newX += 0.5;
+	newY /= PI;
+	newY += 0.5;
+	
+	
+	if (!leftHalfProcessing)
+		newY = 1.0 - newY;
+
+	// apply new central merdian
+	newX = newX - (1.0/goresNumber*float(goreIndex));
+	if (newX < 0.0)
+	{
+		newX = 1.0 + newX;
+	}
+	else if (newX > 1.0)
+	{
+		newX = newX - 1.0;
+	}	
+	
+	return vec2(newX, newY);
+}
+
+...SECTION FROM-CALCULATIONS:
+return coords;
+
+...SECTION TO-FORM:
+<font color="red"><b>This projection tends to produce artifacts.<br>
+If that's the case for you, try "USGS daisy-petal creator" from <a href="http://www.winski.net/?page_id=7" target="_blank">the programs section</a></b></font><br>
+Gores number: <input name="goresNumber" type="number" min="1" max="1000" value="12"><br>
+Connect halves: <input name="connectHalves" type="checkbox">
+Lambert size: <input name="lambertBeginning" type="number" min="0" max="90" value="15" step="0.1"><br>
+Pick surplus latitude in degrees (from 0 to 90): <input name="surplusX" type="number" min="0" max="90" value="1"><br>
+Pick surplus longitude in degrees (from 0 to 90): <input name="surplusY" type="number" min="0" max="90" value="1"><br>
+
+...SECTION FROM-FORM:
+
+...SECTION OUTPUT-WIDTH-CALCULATIONS:
+return meridian*4;
+...SECTION OUTPUT-HEIGHT-CALCULATIONS:
+return meridian*2;
+...SECTION MERIDIAN-LENGTH-CALCULATIONS:
+return width/2;

@@ -1,0 +1,89 @@
+Based on equations from http://mathworld.wolfram.com/MercatorProjection.html
+
+...SECTION TO-CALCULATIONS:
+const float PI = 3.141592653589793238462643383279502884197169399;
+
+// rotate 90 deg anti-clockwise, for standard view of this projection
+float oldCoordsY = coords.y;
+coords.y = coords.x;
+coords.x = 1.0 - oldCoordsY;
+
+// Do standard mercator
+
+coords.y -= 0.5;
+coords.y *= 2.0;
+coords.y *= 180.0/PI*log(tan(PI/4.0+maxLongitude*(PI/180.0)/2.0));
+
+float newY = 180.0/PI * (2.0 * atan(exp(coords.y*PI/180.0)) - PI/2.0);
+newY /= 180.0;
+newY += 0.5;
+float newX = coords.x;
+
+
+// apply new central merdian
+newX = newX + meridian / 360.0;
+if (newX < 0.0)
+{
+	newX = 1.0 + newX;
+}
+else if (newX > 1.0)
+{
+	newX = newX - 1.0;
+}
+
+// rotate in three steps:
+// step 1: calculate point's position in 3D space
+
+// change newX and newY to degrees
+newX -= 0.5;
+newX *= 2.0 * PI;
+newY -= 0.5;
+newY *= PI;
+
+float y3d = sin(newY);
+float c3d = cos(newY);
+float z3d = cos(newX)*c3d;
+float x3d = sin(newX)*c3d;
+
+// step 2: rotate 90 degrees
+// rotate clockwise
+float oldY = y3d;
+y3d = -x3d;
+x3d = oldY;
+
+// step 3: turn back into a sphere
+// keep in mind that the original signs have been lost along the way
+// we'll need to determine it
+newY = asin(y3d);
+c3d = cos(newY);
+newX = abs(acos(z3d/c3d)); 
+if (x3d < 0.0)
+	newX = -newX;
+
+newX /= 2.0*PI;
+newX += 0.5;
+newY /= PI;
+newY += 0.5;
+
+return vec2(newX, newY);
+
+...SECTION FROM-CALCULATIONS:
+return coords;
+
+...SECTION TO-FORM:
+Pick central latitude (from -180 to 180): <input name="meridian" type="number" min="-180" max="180">
+Pick maximum longitude (from 0 to 90): <input name="maxLongitude" type="number" min="0" max="90">
+
+...SECTION FROM-FORM:
+THIS SECTION IS NOT WORKIN YET!<br>
+Pick central longitude (from -180 to 180): <input name="meridian" type="number" min="-180" max="180">
+Pick maximum latitude (from 0 to 90): <input name="maxLongitude" type="number" min="0" max="90">
+Pick central latitude (from -90 to 90): <input name="latitude0" type="number" min="-90" max="90">
+
+...SECTION OUTPUT-WIDTH-CALCULATIONS:
+var xMax = 180.0/Math.PI*Math.log(Math.tan(Math.PI/4.0+getUniformFromArray(uniforms, 'maxLongitude').value*(Math.PI/180.0)/2.0));
+return meridian*2*xMax/180;
+...SECTION OUTPUT-HEIGHT-CALCULATIONS:
+return meridian*2;
+...SECTION MERIDIAN-LENGTH-CALCULATIONS:
+return width/2;
