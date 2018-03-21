@@ -42,7 +42,7 @@ Pick central latitude (from -180 to 180): <input name="meridian" type="number" m
 Pick maximum longitude (from 0 to 90): <input value="82" name="maxLongitude" type="number" min="0" max="90">
 
 ...SECTION FROM-FORM:
-THIS SECTION IS NOT WORKIN YET!<br>
+THIS SECTION IS NOT WORKING YET!<br>
 Pick central longitude (from -180 to 180): <input name="meridian" type="number" min="-180" max="180">
 Pick maximum latitude (from 0 to 90): <input name="maxLongitude" type="number" min="0" max="90">
 Pick central latitude (from -90 to 90): <input name="latitude0" type="number" min="-90" max="90">

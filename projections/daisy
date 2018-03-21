@@ -183,8 +183,6 @@ else
 return coords;
 
 ...SECTION TO-FORM:
-<font color="red"><b>This projection tends to produce artifacts.<br>
-If that's the case for you, try "USGS daisy-petal creator" from <a href="http://www.winski.net/?page_id=7" target="_blank">the programs section</a></b></font><br>
 Gores number: <input name="goresNumber" type="number" min="1" max="1000" value="12"><br>
 Connect halves: <input name="connectHalves" type="checkbox">
 Lambert size: <input name="lambertBeginning" type="number" min="0" max="90" value="15" step="0.1"><br>
