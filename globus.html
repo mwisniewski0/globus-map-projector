@@ -44,6 +44,8 @@ function loadTextFromUrl(url)
 	return query.responseText;
 }
 
+var builtinGLSLFunctions = loadTextFromUrl('builtinFuncs.frag');
+
 function prepareFromProjectionUI()
 {
 	document.getElementById("fromProjectionForm").innerHTML = fromProjection.from_form;
@@ -246,7 +248,9 @@ function prepareFragmentShaderSource()
 	}
 	
 	// beginning is the same for every shader, so is main()
-	var source = 'precision mediump float;\n\
+	var source = 
+				'precision mediump float;\n' +
+				builtinGLSLFunctions + '\n' + '\
 				uniform sampler2D image;\n\
 				uniform vec2 textureSize;\n\
 				uniform vec4 backgroundColor;\n\
