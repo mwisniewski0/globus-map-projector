@@ -17,62 +17,29 @@ coords.y *= 180.0/PI*log(tan(PI/4.0+maxLongitude*(PI/180.0)/2.0));
 float newY = 180.0/PI * (2.0 * atan(exp(coords.y*PI/180.0)) - PI/2.0);
 newY /= 180.0;
 newY += 0.5;
-float newX = coords.x;
 
+coords.y = newY;
 
 // apply new central merdian
-newX = newX + meridian / 360.0;
-if (newX < 0.0)
+coords.x = coords.x + meridian / 360.0;
+if (coords.x < 0.0)
 {
-	newX = 1.0 + newX;
+	coords.x = 1.0 + coords.x;
 }
-else if (newX > 1.0)
+else if (coords.x > 1.0)
 {
-	newX = newX - 1.0;
+	coords.x = coords.x - 1.0;
 }
 
-// rotate in three steps:
-// step 1: calculate point's position in 3D space
-
-// change newX and newY to degrees
-newX -= 0.5;
-newX *= 2.0 * PI;
-newY -= 0.5;
-newY *= PI;
-
-float y3d = sin(newY);
-float c3d = cos(newY);
-float z3d = cos(newX)*c3d;
-float x3d = sin(newX)*c3d;
-
-// step 2: rotate 90 degrees
-// rotate clockwise
-float oldY = y3d;
-y3d = -x3d;
-x3d = oldY;
-
-// step 3: turn back into a sphere
-// keep in mind that the original signs have been lost along the way
-// we'll need to determine it
-newY = asin(y3d);
-c3d = cos(newY);
-newX = abs(acos(z3d/c3d)); 
-if (x3d < 0.0)
-	newX = -newX;
-
-newX /= 2.0*PI;
-newX += 0.5;
-newY /= PI;
-newY += 0.5;
-
-return vec2(newX, newY);
+// transverse
+return latLongToTexelCoord(transverse(texelCoordToLatLong(coords)));
 
 ...SECTION FROM-CALCULATIONS:
 return coords;
 
 ...SECTION TO-FORM:
 Pick central latitude (from -180 to 180): <input name="meridian" type="number" min="-180" max="180">
-Pick maximum longitude (from 0 to 90): <input name="maxLongitude" type="number" min="0" max="90">
+Pick maximum longitude (from 0 to 90): <input value="82" name="maxLongitude" type="number" min="0" max="90">
 
 ...SECTION FROM-FORM:
 THIS SECTION IS NOT WORKIN YET!<br>

@@ -140,31 +140,16 @@ else
 	// rotate in three steps:
 	// step 1: calculate point's position in 3D space
 
-	// change newX and newY to degrees
+	// change newX and newY to radians
 	newX -= 0.5;
 	newX *= 2.0 * PI;
 	newY -= 0.5;
 	newY *= PI;
 
-	float y3d = sin(newY);
-	float c3d = cos(newY);
-	float z3d = cos(newX)*c3d;
-	float x3d = sin(newX)*c3d;
-
-	// step 2: rotate 90 degrees
-	// rotate clockwise
-	float oldY = y3d;
-	y3d = -x3d;
-	x3d = oldY;
-
-	// step 3: turn back into a sphere
-	// keep in mind that the original signs have been lost along the way
-	// we'll need to determine it
-	newY = asin(y3d);
-	c3d = cos(newY);
-	newX = abs(acos(z3d/c3d)); 
-	if (x3d < 0.0)
-		newX = -newX;
+	// transverse
+	vec2 transversed = transverse(vec2(newX, newY));
+	newX = transversed.x;
+	newY = transversed.y;
 		
 	if (abs(newX) - surplusX/180.0*PI > PI/goresNumber) // derived from: abs(newX)*2 > PI*2/goresNumber
 		return vec2(-1,-1);
@@ -203,8 +188,8 @@ If that's the case for you, try "USGS daisy-petal creator" from <a href="http://
 Gores number: <input name="goresNumber" type="number" min="1" max="1000" value="12"><br>
 Connect halves: <input name="connectHalves" type="checkbox">
 Lambert size: <input name="lambertBeginning" type="number" min="0" max="90" value="15" step="0.1"><br>
-Pick surplus latitude in degrees (from 0 to 90): <input name="surplusX" type="number" min="0" max="90" value="1"><br>
-Pick surplus longitude in degrees (from 0 to 90): <input name="surplusY" type="number" min="0" max="90" value="1"><br>
+Pick surplus latitude in degrees (from 0 to 90): <input name="surplusY" type="number" min="0" max="90" value="1"><br>
+Pick surplus longitude in degrees (from 0 to 90): <input name="surplusX" type="number" min="0" max="90" value="1"><br>
 
 ...SECTION FROM-FORM:
 
