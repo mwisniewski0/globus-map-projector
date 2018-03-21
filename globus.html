@@ -29,6 +29,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.!-->
 </head>
 <body onresize=""><div id="content">
 <script>
+var buffer;
+
 // used projections
 var fromProjection = null;
 var toProjection = null;
@@ -453,25 +455,26 @@ function explodeIntoSectionTypeAndContent(section)
 
 </script>
 <script>
-var gl;
-var canvas = document.getElementById("canvas");
-
 function getTextFromDOM(id)
 {
     return document.getElementById(id).text;
 }
 
-function initGL()
+function makeGLCanvas()
 {
 	// Get A WebGL context
-	canvas = document.getElementById("canvas");
+	var canvas = document.createElement('canvas');
 	var contextNames = ["webgl", "experimental-webgl"];
-	gl = null;
+	var gl = null;
 	for (var i = 0; i < contextNames.length; ++i)
 	{
 		try
 		{
-		    gl = canvas.getContext(contextNames[i]);
+		    gl = canvas.getContext(contextNames[i], {
+				// Used so that the buffer contains valid information, and bytes can
+				// be retrieved from it. Otherwise, WebGL will switch to the back buffer
+				preserveDrawingBuffer: true
+			});
 		}
 		catch(e) {}
 		if (gl != null)
@@ -482,8 +485,12 @@ function initGL()
 	if (gl == null)
 	{
 	    alert("WebGL not supported.\nGlobus won't work\nTry using browsers such as Mozilla Firefox, Google Chrome or Opera");
-        return;
-	}	
+		// TODO: Expecting that the canvas will be collected. If that is not the case, it will
+		// need to be destroyed somehow.
+		return;
+	}
+
+	return [canvas, gl];
 }
 
 function createShaderFromText(gl, type, source)
@@ -497,7 +504,8 @@ function createShaderFromText(gl, type, source)
     {
         error = gl.getShaderInfoLog(shader);
 		// show it to the user
-		alert("SHADER COMPILATION RETURNED AN ERROR:\n" + error + "\n\n\nShader source:\n" + source);
+		alert("SHADER COMPILATION RETURNED AN ERROR:\n" + error + " More info in the console log");
+		console.log("SHADER COMPILATION RETURNED AN ERROR:\n" + error + "\n\n\nShader source:\n" + source)
         gl.deleteShader(shader);
         return null;
     }
@@ -530,7 +538,7 @@ function prepareWebGLProgram(gl)
 	return program;
 }
 
-function project(image, backgroundR, backgroundG, backgroundB, backgroundA)
+function project(gl, image, backgroundR, backgroundG, backgroundB, backgroundA)
 {	
     // prepare shaders 
     var program = prepareWebGLProgram(gl);
@@ -657,13 +665,14 @@ Or pick your own TO projection:
 <div id="toProjectionForm"></div>
 <br><br><input type="button" id="submit" value="Project!">
 <br><br>
-<canvas id="canvas" width="1" height="1"></canvas>
 <script>
-initGL();
 var imageToProcess;
 
+// makeRender() will be called when the Project! button is clicked.
 function makeRender()
 {
+	[canvas, gl] = makeGLCanvas();
+
     var imageWidth = imageToProcess.width;
 	var imageHeight = imageToProcess.height;
 	
@@ -679,12 +688,30 @@ function makeRender()
 		+ fromProjection.meridian_length_calculations + "})(imageWidth, imageHeight, fromUniforms)");
 	
 	// calculating size of canvas based on length of meridian
-    document.getElementById('canvas').width = eval("(function(meridian, uniforms) {"
+    canvas.width = eval("(function(meridian, uniforms) {"
 		+ toProjection.output_width_calculations + "})(meridianLength, toUniforms)");
-	document.getElementById('canvas').height = eval("(function(meridian, uniforms) {"
+	canvas.height = eval("(function(meridian, uniforms) {"
 		+ toProjection.output_height_calculations + "})(meridianLength, toUniforms)");
 
-    project(imageToProcess);
+	// All implementations of WebGL have maximum sizes for the canvas. If that size is exceeded,
+	// we need to inform the user, and shrink the canvas accordingly
+	if (canvas.width != gl.drawingBufferWidth || canvas.height != gl.drawingBufferHeight) {
+		alert('Your browser was unable to render the projection in the desired size. A smaller ' +
+			  'version of the canvas will be used.');
+		[canvas.width, canvas.height] = [gl.drawingBufferWidth, gl.drawingBufferHeight];
+	}
+
+	project(gl, imageToProcess);
+	
+	// remove the previous result if it exists
+	var oldCanvas = document.getElementById("canvas");
+	if (oldCanvas != null) {
+		document.body.removeChild(oldCanvas);
+	}
+
+	// display the result
+	canvas.id = "canvas";
+	document.body.appendChild(canvas);
 	
 	// Some very easy analytics for me - just want to know if you use it :)
 	var xmlHttp = new XMLHttpRequest();
