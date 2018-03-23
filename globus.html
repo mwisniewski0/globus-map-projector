@@ -254,7 +254,6 @@ function prepareFragmentShaderSource()
 				'precision highp float;\n' +
 				builtinGLSLFunctions + '\n' + '\
 				uniform sampler2D image;\n\
-				uniform vec2 textureSize;\n\
 				uniform vec4 backgroundColor;\n\
 				\n\
 				varying vec2 texCoord;\n' +
@@ -545,19 +544,7 @@ function project(gl, image, backgroundR, backgroundG, backgroundB, backgroundA)
     gl.useProgram(program);  
 
 	// find attributes' locations
-	var positionLocation = gl.getAttribLocation(program, "currentPixel");
-    var texelDataLocation = gl.getAttribLocation(program, "texelCoord");
-	
-    // prepare texture coordinates for vertex shader
-    var texelBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, texelBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-        0.0,  0.0,
-        1.0,  0.0,
-        0.0,  1.0,
-        1.0,  1.0]), gl.STATIC_DRAW);
-    gl.enableVertexAttribArray(texelDataLocation);
-    gl.vertexAttribPointer(texelDataLocation, 2, gl.FLOAT, false, 0, 0);
+	var currentPixelLocation = gl.getAttribLocation(program, "currentPixel");
 
 	// prepare texture
     var texture = gl.createTexture();
@@ -568,21 +555,24 @@ function project(gl, image, backgroundR, backgroundG, backgroundB, backgroundA)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
   
-    // find uniforms' locations
-    var textureSizeLocation = gl.getUniformLocation(program, "textureSize");
+	// find uniforms' locations. The meanings of these variables are explained in the
+	// source of the vertex and fragment shaders.
     var backgroundColorLocation = gl.getUniformLocation(program, "backgroundColor");
     var resolutionLocation = gl.getUniformLocation(program, "resolution");
+    var positionOfTopLeftCornerLocation = gl.getUniformLocation(program, "positionOfTopLeftCorner");
+    var sizeOfThisCanvasLocation = gl.getUniformLocation(program, "sizeOfThisCanvas");
 
     // set uniforms
     gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
-    gl.uniform2f(textureSizeLocation, image.width, image.height);
+    gl.uniform2f(positionOfTopLeftCornerLocation, 0, 0); // For now this is set to 0,0 - we only do a single canvas
+    gl.uniform2f(sizeOfThisCanvasLocation, canvas.width, canvas.height); // Temporary result, since we only do a single canvas
     gl.uniform4f(backgroundColorLocation, backgroundR, backgroundG, backgroundB, backgroundA);  
 
     // prepare buffer with rectangle vertices
     var positionBuffer = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-	gl.enableVertexAttribArray(positionLocation);
-	gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+	gl.enableVertexAttribArray(currentPixelLocation);
+	gl.vertexAttribPointer(currentPixelLocation, 2, gl.FLOAT, false, 0, 0);
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
 		0, 0,
 		canvas.width, 0,
@@ -598,7 +588,6 @@ function project(gl, image, backgroundR, backgroundG, backgroundB, backgroundA)
 	// clean up
 	gl.deleteTexture(texture);
 	gl.deleteBuffer(positionBuffer);
-	gl.deleteBuffer(texelBuffer);
 	gl.deleteProgram(program);
 }
 
@@ -606,23 +595,44 @@ function project(gl, image, backgroundR, backgroundG, backgroundB, backgroundA)
 
 <!-- vertex shader is the same for every projection -->
 <script id="vertex-shader" type="x-shader/x-vertex">
+// A vector of the (x,y) coordinates of the current pixel we are working on.
+// Those are the absolute pixel coordinates of the output image.
 attribute vec2 currentPixel;
-attribute vec2 texelCoord;
+
+// The size of the output picture
 uniform vec2 resolution;
+
+// This canvas is likely to be only a part of the output image. The variables
+// below identify what part of the canvas it is
+
+// Specifies the position of the top-left corner of this canvas in the coordinate
+// system of the output image
+uniform vec2 positionOfTopLeftCorner;
+
+// Size of this canvas in pixels
+uniform vec2 sizeOfThisCanvas;
+
+// This variable is used to inform the fragment shader about the texel we are
+// currently operating on
 varying vec2 texCoord;
+
 
 void main()
 {
-	vec2 resultantPosition = currentPixel;
-    resultantPosition = currentPixel / resolution; // change from pixels to (0, 1) range
-    resultantPosition = resultantPosition - vec2(0.5,0.5); // change it to (-0.5, 0.5)
-	resultantPosition = resultantPosition * 2.0; // change it to (-1, 1)
-	resultantPosition = vec2(resultantPosition.x, -resultantPosition.y); // flip y axis (so -1 is up and 1 is down)
+	// Move the coordinates to the coordinate system of this canvas
+	vec2 clipSpaceCoords = currentPixel - positionOfTopLeftCorner;
+
+
+    clipSpaceCoords = clipSpaceCoords / sizeOfThisCanvas; // change from pixels to (0, 1) range
+    clipSpaceCoords = clipSpaceCoords - vec2(0.5,0.5); // change it to (-0.5, 0.5)
+	clipSpaceCoords = clipSpaceCoords * 2.0; // change it to (-1, 1)
+	clipSpaceCoords = vec2(clipSpaceCoords.x, -clipSpaceCoords.y); // flip y axis (so -1 is up and 1 is down)
 	
-    gl_Position = vec4(resultantPosition, 0, 1); 
+	// Return the clip space to the GPU
+    gl_Position = vec4(clipSpaceCoords, 0, 1); 
 
     // pass texel position to fragmentShader
-    texCoord = texelCoord;
+    texCoord = currentPixel / resolution;
 }
 </script>
 <big>If you came here just to make your own globe, click button below, it will automatically select projections:
