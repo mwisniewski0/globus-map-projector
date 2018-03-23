@@ -251,7 +251,7 @@ function prepareFragmentShaderSource()
 	
 	// beginning is the same for every shader, so is main()
 	var source = 
-				'precision mediump float;\n' +
+				'precision highp float;\n' +
 				builtinGLSLFunctions + '\n' + '\
 				uniform sampler2D image;\n\
 				uniform vec2 textureSize;\n\
@@ -613,7 +613,7 @@ varying vec2 texCoord;
 
 void main()
 {
-	vec2 resultantPosition = currentPixel;   
+	vec2 resultantPosition = currentPixel;
     resultantPosition = currentPixel / resolution; // change from pixels to (0, 1) range
     resultantPosition = resultantPosition - vec2(0.5,0.5); // change it to (-0.5, 0.5)
 	resultantPosition = resultantPosition * 2.0; // change it to (-1, 1)
