@@ -550,6 +550,78 @@ function prepareWebGLProgram(gl)
     return program;
 }
 
+// From Wikipedia
+function gcd(a,b) {
+    a = Math.abs(a);
+    b = Math.abs(b);
+    if (b > a) {var temp = a; a = b; b = temp;}
+    while (true) {
+        if (b == 0) return a;
+        a %= b;
+        if (a == 0) return b;
+        b %= a;
+    }
+}
+
+function isGlContextFillingTheCanvas(gl) {
+    return gl.canvas.width == gl.drawingBufferWidth && gl.canvas.height == gl.drawingBufferHeight;
+}
+
+// (See issue #2) All browsers reduce the size of the WebGL draw buffer for large canvases 
+// (usually over 4096px in width or height). This function uses a varian of binary search to
+// find the maximum size for a canvas given the provided x to y size ratio.
+//
+// To produce exact results, this function expects an integer ratio. The ratio will be equal to:
+// xRatio/yRatio.
+function determineMaxCanvasSize(xRatio, yRatio) {
+    // This function works experimentally, by creating an actual canvas and finding the maximum
+    // value, the browser allows.
+    [canvas, gl] = makeGLCanvas();
+
+    // Reduce the ratio to minimum
+    gcdOfRatios = gcd(xRatio, yRatio);
+    [xRatio, yRatio] = [xRatio/gcdOfRatios, yRatio/gcdOfRatios];
+
+    // if the browser cannot handle the minimum ratio, there is not much we can do
+    canvas.width = xRatio;
+    canvas.height = yRatio;
+
+    if (!isGlContextFillingTheCanvas(gl)) {
+        throw "The browser is unable to use WebGL canvases with the specified ratio: " + 
+            xRatio + ":" + yRatio;
+    }
+
+    // First find an upper bound
+    var ratioMultiple = 1;  // to maintain the exact ratio, we will keep the multiplyer that
+                            // resulted in the upper bound for the canvas size
+    while (isGlContextFillingTheCanvas(gl)) {
+        canvas.width *= 2;
+        canvas.height *= 2;
+        ratioMultiple *= 2;
+    }
+
+    // Search with minVal inclusive, maxVal exclusive
+    function binarySearch(minVal, maxVal) {
+        if (minVal == maxVal) {
+            return minVal;
+        }
+
+        middle = Math.floor((maxVal - minVal)/2) + minVal;
+        
+        canvas.width = middle * xRatio;
+        canvas.height = middle * yRatio;
+
+        if (isGlContextFillingTheCanvas(gl)) {
+            return binarySearch(middle + 1, maxVal);
+        } else {
+            return binarySearch(minVal, middle);
+        }
+    }
+
+    ratioMultiple = binarySearch(1, ratioMultiple);
+    return [xRatio * ratioMultiple, yRatio * ratioMultiple];
+}
+
 function project(gl, image, backgroundR, backgroundG, backgroundB, backgroundA)
 {    
     // prepare shaders 
