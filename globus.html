@@ -261,7 +261,7 @@ function prepareFragmentShaderSource()
     var source = 
                 'precision highp float;\n' +
                 builtinGLSLFunctions + '\n' + '\
-                uniform sampler2D image;\n\
+                uniform sampler2D inputImage;\n\
                 uniform vec4 backgroundColor;\n\
                 \n\
                 varying vec2 texCoord;\n' +
@@ -275,7 +275,7 @@ function prepareFragmentShaderSource()
                 vec2 sourceCoords = projectFromEquirectangular(projectToEquirectangular(texCoord));\n\
                 \n\
                 if (sourceCoords.x >= 0.0 && sourceCoords.y >= 0.0)\n\
-                color = texture2D(image, sourceCoords);\n\
+                color = texture2D(inputImage, sourceCoords);\n\
                 gl_FragColor = color;\n\
                 }';
     
@@ -493,7 +493,7 @@ function makeGLCanvas()
     }
     if (gl == null)
     {
-        alert("WebGL not supported.\nGlobus won't work\nTry using browsers such as Mozilla " +
+        throw ("WebGL not supported.\nGlobus won't work\nTry using browsers such as Mozilla " +
               "Firefox, Google Chrome or Opera");
         // TODO: Expecting that the canvas will be collected. If that is not the case, it will
         // need to be destroyed somehow.
@@ -548,6 +548,14 @@ function prepareWebGLProgram(gl)
     }
     
     return program;
+}
+
+// Simple structure for storing colors. R, G, B and A should be in the range [0, 1]
+function Color(r, g, b, a) {
+    this.r = r;
+    this.g = g;
+    this.b = b;
+    this.a = a;
 }
 
 // From Wikipedia
@@ -622,7 +630,25 @@ function determineMaxCanvasSize(xRatio, yRatio) {
     return [xRatio * ratioMultiple, yRatio * ratioMultiple];
 }
 
-function project(gl, image, backgroundR, backgroundG, backgroundB, backgroundA)
+// Determining the max canvas size is quite costly. We will cache the results
+getMaxCanvasSizeCache = {};
+
+// Follows the signature for determineMaxCanvasSize()
+function getMaxCanvasSize(xRatio, yRatio) {
+    gcdOfRatios = gcd(xRatio, yRatio);
+    [xRatio, yRatio] = [xRatio/gcdOfRatios, yRatio/gcdOfRatios];
+
+    key = "" + xRatio + ":" + yRatio;
+    if (key in getMaxCanvasSizeCache) {
+        return getMaxCanvasSizeCache[key];
+    } else {
+        getMaxCanvasSizeCache[key] = determineMaxCanvasSize(xRatio, yRatio);
+        return getMaxCanvasSizeCache[key];
+    }
+}
+
+function project(gl, inputImage, backgroundColor, canvasWidth, canvasHeight, xStart, yStart,
+                 outputWidth, outputHeight)
 {    
     // prepare shaders 
     var program = prepareWebGLProgram(gl);
@@ -638,7 +664,7 @@ function project(gl, image, backgroundR, backgroundG, backgroundB, backgroundA)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, inputImage);
   
     // find uniforms' locations. The meanings of these variables are explained in the
     // source of the vertex and fragment shaders.
@@ -648,12 +674,17 @@ function project(gl, image, backgroundR, backgroundG, backgroundB, backgroundA)
     var sizeOfThisCanvasLocation = gl.getUniformLocation(program, "sizeOfThisCanvas");
 
     // set uniforms
-    gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
-    gl.uniform2f(positionOfTopLeftCornerLocation, 0, 0); // For now this is set to 0,0 - we only do 
-                                                         // a single canvas
-    gl.uniform2f(sizeOfThisCanvasLocation, canvas.width, canvas.height); // Temporary result, since
-                                                                         // we use single canvas
-    gl.uniform4f(backgroundColorLocation, backgroundR, backgroundG, backgroundB, backgroundA);  
+    gl.uniform2f(resolutionLocation, outputWidth, outputHeight);
+    gl.uniform2f(positionOfTopLeftCornerLocation, xStart, yStart);
+    gl.uniform2f(sizeOfThisCanvasLocation, canvasWidth, canvasHeight);
+    
+    gl.uniform4f(
+        backgroundColorLocation,
+        backgroundColor.R,
+        backgroundColor.G,
+        backgroundColor.B,
+        backgroundColor.A
+    );  
 
     // prepare buffer with rectangle vertices
     var positionBuffer = gl.createBuffer();
@@ -661,10 +692,10 @@ function project(gl, image, backgroundR, backgroundG, backgroundB, backgroundA)
     gl.enableVertexAttribArray(currentPixelLocation);
     gl.vertexAttribPointer(currentPixelLocation, 2, gl.FLOAT, false, 0, 0);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-        0, 0,
-        canvas.width, 0,
-        0, canvas.height,
-        canvas.width, canvas.height]), gl.STATIC_DRAW);
+        xStart, yStart,
+        canvasWidth, yStart,
+        xStart, canvasHeight,
+        canvasWidth, canvasHeight]), gl.STATIC_DRAW);
     
     // set the viewport, so our render will be of the size of canvas
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
@@ -797,13 +828,14 @@ function makeRender()
 
     // All implementations of WebGL have maximum sizes for the canvas. If that size is exceeded,
     // we need to inform the user, and shrink the canvas accordingly
-    if (canvas.width != gl.drawingBufferWidth || canvas.height != gl.drawingBufferHeight) {
+    if (!isGlContextFillingTheCanvas(gl)) {
         alert('Your browser was unable to render the projection in the desired size. A smaller ' +
               'version of the canvas will be used.');
-        [canvas.width, canvas.height] = [gl.drawingBufferWidth, gl.drawingBufferHeight];
+        [canvas.width, canvas.height] = getMaxCanvasSize(canvas.width, canvas.height);
     }
 
-    project(gl, imageToProcess);
+    project(gl, imageToProcess, new Color(1, 1, 1, 0), canvas.width, canvas.height, 0, 0,
+            canvas.width, canvas.height);
     
     // remove the previous result if it exists
     var oldCanvas = document.getElementById("canvas");
