@@ -29,8 +29,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.!-->
 </head>
 <body onresize=""><div id="content">
 <script>
-var buffer;
-
 // used projections
 var fromProjection = null;
 var toProjection = null;
@@ -558,6 +556,89 @@ function Color(r, g, b, a) {
     this.a = a;
 }
 
+function projectInPieces(inputImage, backgroundColor, outputWidth, outputHeight, maxCanvasWidth, 
+                         maxCanvasHeight, onNextPiece) {
+    [canvas, gl] = makeGLCanvas();
+    canvas.width = maxCanvasWidth;
+    canvas.height = maxCanvasHeight;
+
+    // PREPARE THE GL CONTEXT FOR RENDERING
+    // (No point in refactoring this code out - we need to keep handles to the uniform locations,
+    // and we need to clean up afterwards)
+    // ------------------------------------------------
+
+    // prepare shaders 
+    var program = prepareWebGLProgram(gl);
+    gl.useProgram(program);  
+
+    // find attributes' locations
+    var currentPixelLocation = gl.getAttribLocation(program, "currentPixel");
+
+    // prepare texture
+    var texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, inputImage);
+  
+    // find uniforms' locations. The meanings of these variables are explained in the
+    // source of the vertex and fragment shaders.
+    var backgroundColorLocation = gl.getUniformLocation(program, "backgroundColor");
+    var resolutionLocation = gl.getUniformLocation(program, "resolution");
+    var positionOfTopLeftCornerLocation = gl.getUniformLocation(program, "positionOfTopLeftCorner");
+    var sizeOfThisCanvasLocation = gl.getUniformLocation(program, "sizeOfThisCanvas");
+    
+    gl.uniform4f(
+        backgroundColorLocation,
+        backgroundColor.R,
+        backgroundColor.G,
+        backgroundColor.B,
+        backgroundColor.A
+    );
+    // ------------------------------------------------
+
+    for (var xStart = 0; xStart < outputWidth; xStart += maxCanvasWidth) {
+        var pieceWidth = Math.min(maxCanvasWidth, outputWidth - xStart);
+
+        for (var yStart = 0; yStart < outputHeight; yStart += maxCanvasHeight) {
+            var pieceHeight = Math.min(maxCanvasHeight, outputHeight - yStart);
+            
+            // Fill our canvas with the appropriate fragment of the projection:
+
+            // Choose the appropriate part of the render
+            gl.uniform2f(resolutionLocation, outputWidth, outputHeight);
+            gl.uniform2f(positionOfTopLeftCornerLocation, xStart, yStart);
+            gl.uniform2f(sizeOfThisCanvasLocation, pieceWidth, pieceHeight);
+
+            // prepare buffer with rectangle vertices
+            var positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.enableVertexAttribArray(currentPixelLocation);
+            gl.vertexAttribPointer(currentPixelLocation, 2, gl.FLOAT, false, 0, 0);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                xStart, yStart,
+                xStart + pieceWidth, yStart,
+                xStart, yStart + pieceHeight,
+                xStart + pieceWidth, yStart + pieceHeight]), gl.STATIC_DRAW);
+            
+            // set the viewport, so our render will be of the size of canvas
+            gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+            
+            // Draw the projection
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+            onNextPiece(canvas, gl, xStart, yStart, pieceWidth, pieceHeight);
+        }
+    }
+
+    // clean up
+    gl.deleteTexture(texture);
+    gl.deleteBuffer(positionBuffer);
+    gl.deleteProgram(program);
+}
+
 // From Wikipedia
 function gcd(a,b) {
     a = Math.abs(a);
@@ -693,9 +774,9 @@ function project(gl, inputImage, backgroundColor, canvasWidth, canvasHeight, xSt
     gl.vertexAttribPointer(currentPixelLocation, 2, gl.FLOAT, false, 0, 0);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
         xStart, yStart,
-        canvasWidth, yStart,
-        xStart, canvasHeight,
-        canvasWidth, canvasHeight]), gl.STATIC_DRAW);
+        xStart + canvasWidth, yStart,
+        xStart, yStart + canvasHeight,
+        xStart + canvasWidth, yStart + canvasHeight]), gl.STATIC_DRAW);
     
     // set the viewport, so our render will be of the size of canvas
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
@@ -798,63 +879,48 @@ Or pick your own TO projection:
 <div id="toProjectionForm"></div>
 <br><br><input type="button" id="submit" value="Project!">
 <br><br>
+<canvas id="canvas" width="1" height="1"></canvas>
 <script>
 var imageToProcess;
 
-// makeRender() will be called when the Project! button is clicked.
 function makeRender()
 {
-    [canvas, gl] = makeGLCanvas();
-
     var imageWidth = imageToProcess.width;
     var imageHeight = imageToProcess.height;
     
     // we use user provided functions to calculate width and height
     // of output image
-    
+
     // we need to provide uniforms from the form to those functions
     var toUniforms = getUniformsFromForm('toProjectionForm');
     var fromUniforms = getUniformsFromForm('fromProjectionForm');
-    
+
     // calculating length of meridian based on image size
     var meridianLength = eval("(function(width, height, uniforms) {" +
         fromProjection.meridian_length_calculations + "})(imageWidth, imageHeight, fromUniforms)");
     
     // calculating size of canvas based on length of meridian
-    canvas.width = eval("(function(meridian, uniforms) {" +
+    var outputWidth = eval("(function(meridian, uniforms) {" +
         toProjection.output_width_calculations + "})(meridianLength, toUniforms)");
-    canvas.height = eval("(function(meridian, uniforms) {" +
+    var outputHeight = eval("(function(meridian, uniforms) {" +
         toProjection.output_height_calculations + "})(meridianLength, toUniforms)");
 
-    // All implementations of WebGL have maximum sizes for the canvas. If that size is exceeded,
-    // we need to inform the user, and shrink the canvas accordingly
-    if (!isGlContextFillingTheCanvas(gl)) {
-        alert('Your browser was unable to render the projection in the desired size. A smaller ' +
-              'version of the canvas will be used.');
-        [canvas.width, canvas.height] = getMaxCanvasSize(canvas.width, canvas.height);
-    }
-
-    project(gl, imageToProcess, new Color(1, 1, 1, 0), canvas.width, canvas.height, 0, 0,
-            canvas.width, canvas.height);
-    
-    // remove the previous result if it exists
-    var oldCanvas = document.getElementById("canvas");
-    if (oldCanvas != null) {
-        document.body.removeChild(oldCanvas);
-    }
-
-    // display the result
-    canvas.id = "canvas";
-    document.body.appendChild(canvas);
+    var mainCanvas = document.getElementById("canvas");
+    mainCanvas.width = outputWidth;
+    mainCanvas.height = outputHeight;
+    var ctxt = mainCanvas.getContext("2d");
+    projectInPieces(imageToProcess, new Color(1, 1, 1, 0), outputWidth, outputHeight, 1024, 1024,
+        function(canvas, gl, xStart, yStart, pieceWidth, pieceHeight) {
+            ctxt.drawImage(
+                canvas, 0, 0, pieceWidth, pieceHeight, xStart, yStart, pieceWidth, pieceHeight);
+        });
     
     // Some very easy analytics for me - just want to know if you use it :)
     var xmlHttp = new XMLHttpRequest();
     xmlHttp.open("GET", "countProjections.php", false );
     xmlHttp.send(null);
-    
-    // if we're in iframe, our parent will be able to use this onresize
-    document.body.onresize();
 }
+
 </script>
 <script>
 function loadProjectionFromSelector(selector)
