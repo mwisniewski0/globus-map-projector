@@ -10,7 +10,7 @@ int currentGore = 0;
 // First we'll project the point to a single gore of height 1.0
 
 // for concentric gores
-if (interceptionType == 1)
+if (interruptionType == 1)
 {
 	bool goreFound = false;
 
@@ -44,7 +44,7 @@ if (interceptionType == 1)
 	}
 }
 // for parallel gores
-else if (interceptionType == 0)
+else if (interruptionType == 0)
 {	
 	// find which gore we are in
 	currentGore = int(coords.x / goreWidth);
@@ -110,7 +110,7 @@ newX = newX*cos((newY-0.5)*PI);
 newX = newX + 0.5;
 
 // for concentric gores
-if (interceptionType == 1)
+if (interruptionType == 1)
 {
 	// shrink the gore to 1/2 of height
 	newY = newY * 0.5;
@@ -125,7 +125,7 @@ if (interceptionType == 1)
 	newX = tmpX;
 }
 // for parallel gores
-else if (interceptionType == 0)
+else if (interruptionType == 0)
 {	
 	// shift point to proper place
 	newX = newX - 0.5 + midOfGore;
@@ -134,7 +134,7 @@ else if (interceptionType == 0)
 return vec2(newX, newY);
 
 ...SECTION TO-FORM:
-Pick type of interception <select name="interceptionType">
+Pick type of interruption <select name="interruptionType">
 <option>Parallel gores</option>
 <option>Daisy petal</option>
 </select><br>
@@ -142,7 +142,7 @@ Number of gores <input type="number" name="goresNumber" min="2" value="12"><br>
 Pick the central meridian <input name="meridian" type="number" min="-180" max="180">
 
 ...SECTION FROM-FORM:
-Pick type of interception <select name="interceptionType">
+Pick type of interruption <select name="interruptionType">
 <option>Parallel gores</option>
 <option>Contentric gores</option>
 </select><br>
@@ -150,7 +150,7 @@ Number of gores <input type="number" name="goresNumber" min="2" value="12"><br>
 Pick the central meridian <input name="meridian" type="number" min="-180" max="180">
 
 ...SECTION OUTPUT-WIDTH-CALCULATIONS:
-switch (getUniformFromArray(uniforms, 'interceptionType').value)
+switch (getUniformFromArray(uniforms, 'interruptionType').value)
 {
 	case 0:		
 		return meridian*2;
@@ -161,7 +161,7 @@ switch (getUniformFromArray(uniforms, 'interceptionType').value)
 }
 
 ...SECTION OUTPUT-HEIGHT-CALCULATIONS:
-switch (getUniformFromArray(uniforms, 'interceptionType').value)
+switch (getUniformFromArray(uniforms, 'interruptionType').value)
 {
 	case 0:
 		return meridian;
@@ -172,7 +172,7 @@ switch (getUniformFromArray(uniforms, 'interceptionType').value)
 }
 
 ...SECTION MERIDIAN-LENGTH-CALCULATIONS:
-switch (getUniformFromArray(uniforms, 'interceptionType').value)
+switch (getUniformFromArray(uniforms, 'interruptionType').value)
 {
 	case 0:		
 		return width/2;
