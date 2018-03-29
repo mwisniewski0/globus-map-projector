@@ -610,7 +610,7 @@ function projectInPieces(inputImage, backgroundColor, outputWidth, outputHeight,
             // Choose the appropriate part of the render
             gl.uniform2f(resolutionLocation, outputWidth, outputHeight);
             gl.uniform2f(positionOfTopLeftCornerLocation, xStart, yStart);
-            gl.uniform2f(sizeOfThisCanvasLocation, pieceWidth, pieceHeight);
+            gl.uniform2f(sizeOfThisCanvasLocation, canvas.width, canvas.height);
 
             // prepare buffer with rectangle vertices
             var positionBuffer = gl.createBuffer();
@@ -619,9 +619,9 @@ function projectInPieces(inputImage, backgroundColor, outputWidth, outputHeight,
             gl.vertexAttribPointer(currentPixelLocation, 2, gl.FLOAT, false, 0, 0);
             gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
                 xStart, yStart,
-                xStart + pieceWidth, yStart,
-                xStart, yStart + pieceHeight,
-                xStart + pieceWidth, yStart + pieceHeight]), gl.STATIC_DRAW);
+                xStart + canvas.width, yStart,
+                xStart, yStart + canvas.height,
+                xStart + canvas.width, yStart + canvas.height]), gl.STATIC_DRAW);
             
             // set the viewport, so our render will be of the size of canvas
             gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
